@@ -469,7 +469,11 @@
   function switchTab(t, el) { document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active')); el.classList.add('active'); ['receive', 'pickup', 'history'].forEach(id => document.getElementById('tab-'+id).style.display = (id === t ? 'block' : 'none')); if(t==='pickup' && navigator.onLine) forceUpdateCache(true); if(t==='history') searchHistory(); }
   function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
   function compressImage(file, q, cb) { const r = new FileReader(); r.readAsDataURL(file); r.onload = e => { const i = new Image(); i.src = e.target.result; i.onload = () => { const c = document.createElement('canvas'); const max=800; let w=i.width, h=i.height; if(w>max){h=Math.round(h*(max/w));w=max;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); cb(c.toDataURL('image/jpeg', q).split(',')[1]); } } }
+  // --- UI Helper Functions ---
+  function showLoading(s) {const el = document.getElementById('loadingOverlay');if (el) el.style.display = s ? 'flex' : 'none';
+  }
 </script>
 </body>
 </html>
+
 
