@@ -165,30 +165,46 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-  // 🟢 設定你的 Google Apps Script URL
+  // 🟢 請在這裡貼上你刚刚 "重新部署" 後的新網址！
   const API_URL = "https://script.google.com/macros/s/AKfycbwcHL0r_GEV8v2vfjwviL8n-kDZTDfUY0-7D1c8NHu7-oTi0NbnxS_I09jC5ooWU0w61g/exec";
 
   let residentData = [], config = {}, tempBatch = [], allParcels = [], selectedIds = new Set();
   let selectedResident = null, signaturePad = null, historyTimeout = null, isSyncing = false;
   let deferredPrompt;
 
-  // --- 初始化 (PWA 核心) ---
+  // 1. 定義 resizeCanvas (確保它在 window.onload 之前被定義)
+  function resizeCanvas() {
+    const canvas = document.getElementById('signature-pad');
+    if (!canvas || !signaturePad) return; // 錯誤保護
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    canvas.getContext("2d").scale(ratio, ratio);
+    signaturePad.clear();
+  }
+
+  // 2. 初始化
   window.onload = function() {
     registerSW();
     checkNetworkStatus();
 
-    // 1. 讀取快取 (LocalStorage)
+    // 讀取快取
     loadFromCache();
 
-    // 2. 如果連線中，背景更新
+    // 嘗試更新
     if (navigator.onLine) {
         forceUpdateCache(true); 
     }
 
-    // Init UI
+    // UI 初始化
     const canvas = document.getElementById('signature-pad');
-    signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(255, 255, 255)' });
-    document.getElementById('signModal').addEventListener('shown.bs.modal', resizeCanvas);
+    if (canvas) {
+        signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(255, 255, 255)' });
+        // 綁定 Modal 事件
+        const modalEl = document.getElementById('signModal');
+        if(modalEl) modalEl.addEventListener('shown.bs.modal', resizeCanvas);
+    }
+    
     document.getElementById('inputUnit').addEventListener('input', handleUnitSearch);
     document.getElementById('inputPhoto').addEventListener('change', previewPhoto);
 
@@ -196,15 +212,15 @@
     autoSyncProcess();
   };
 
-  // 註冊 Service Worker
+  // 3. 註冊 SW
   async function registerSW() {
     if ('serviceWorker' in navigator) {
       try {
-        await navigator.serviceWorker.register('sw.js');
+        // 加上 timestamp 防止瀏覽器死都不更新 sw.js
+        await navigator.serviceWorker.register('sw.js?v=' + new Date().getTime());
         console.log('SW registered');
       } catch (e) { console.log('SW failed', e); }
     }
-    // Install Prompt
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault(); deferredPrompt = e;
       document.getElementById('installBtn').style.display = 'block';
@@ -220,24 +236,21 @@
     }
   }
 
-  // --- API 呼叫核心 (取代 google.script.run) ---
+  // API 呼叫
   async function callApi(action, payload = null, method = 'GET') {
     let url = `${API_URL}?action=${action}`;
     let options = { method: method };
 
-    // POST
     if (method === 'POST') {
         options.body = JSON.stringify(payload);
-        // GAS 對 POST 的 Content-Type 有特別癖好，有時 text/plain 更好
         options.headers = { "Content-Type": "text/plain;charset=utf-8" };
-    } 
-    // GET Search Query
-    else if (payload && method === 'GET') {
+    } else if (payload && method === 'GET') {
         url += `&q=${encodeURIComponent(payload)}`;
     }
 
     try {
         const response = await fetch(url, options);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         return await response.json();
     } catch (error) {
         console.error("API Error:", error);
@@ -245,7 +258,8 @@
     }
   }
 
-  // --- 資料處理 ---
+  // --- 其他功能函式 (保持不變) ---
+  
   function loadFromCache() {
     const r = localStorage.getItem('p_residents');
     const c = localStorage.getItem('p_config');
@@ -254,7 +268,7 @@
 
     if (r) {
         residentData = JSON.parse(r);
-        statusEl.innerHTML = `✅ Data Ready (${residentData.length} units)`;
+        statusEl.innerHTML = `✅ Cached Data (${residentData.length} units)`;
         statusEl.className = "text-success fw-bold";
     } else {
         statusEl.innerHTML = `⚠️ No Data. Connect Internet!`;
@@ -269,18 +283,15 @@
       if (!silent) showLoading(true);
 
       try {
-          // 1. Get Residents
           const res = await callApi('getResidents');
           residentData = res;
           localStorage.setItem('p_residents', JSON.stringify(res));
           
-          // 2. Get Config
           const conf = await callApi('getConfig');
           config = conf;
           localStorage.setItem('p_config', JSON.stringify(conf));
           applyConfig(conf);
 
-          // 3. Get Inventory (Pending)
           const inv = await callApi('getPending');
           allParcels = inv;
           localStorage.setItem('p_inventory', JSON.stringify(inv));
@@ -288,6 +299,8 @@
           updateInventoryMenu(inv);
 
           document.getElementById('cacheStatusText').innerHTML = `✅ Synced (${res.length} units)`;
+          document.getElementById('cacheStatusText').className = "text-success fw-bold";
+          
           if (!silent) { showLoading(false); Swal.fire("Synced!", "Data updated.", "success"); }
 
       } catch (e) {
@@ -295,9 +308,7 @@
       }
   }
 
-  // --- 業務邏輯 (與 V2.7 類似，但改用 callApi) ---
   function addParcelToList() {
-      // (邏輯與之前相同，略作簡化)
       const isManual = document.getElementById('chkManualEntry').checked;
       const photo = document.getElementById('inputPhoto');
       if (!isManual && !selectedResident) { Swal.fire("Notice", "Select resident", "warning"); return; }
@@ -336,16 +347,15 @@
       if (q.length === 0) return;
 
       isSyncing = true; updateSyncUI();
-      const item = q[0]; // Take first item
+      const item = q[0]; 
 
       try {
-          // 🟢 呼叫後端 API (action=receive)
           const res = await callApi('receive', item, 'POST');
           if (res.success) {
-              q.shift(); // Remove from queue
+              q.shift(); 
               localStorage.setItem('p_sync_queue', JSON.stringify(q));
               updateSyncUI();
-              setTimeout(autoSyncProcess, 500); // Next
+              setTimeout(autoSyncProcess, 500); 
           } else {
               console.error("Sync fail", res);
               isSyncing = false;
@@ -356,7 +366,6 @@
       }
   }
 
-  // --- 歷史搜尋 ---
   async function searchHistory() {
       if (!navigator.onLine) return;
       const q = document.getElementById('historySearch').value;
@@ -371,9 +380,7 @@
   async function restore(id) {
      if(confirm("Restore this parcel?")) {
          showLoading(true);
-         await callApi('restore', null, 'POST?action=restore&id='+id); // 簡單拼湊 url
-         // 或者標準做法:
-         // await fetch(`${API_URL}?action=restore&id=${id}`, {method:'POST'});
+         await callApi('restore', null, 'POST?action=restore&id='+id);
          showLoading(false);
          searchHistory();
      }
@@ -389,7 +396,7 @@
          if(res.success) {
              Swal.fire("Done!", "", "success");
              selectedIds.clear();
-             forceUpdateCache(true); // Refresh inventory
+             forceUpdateCache(true); 
          }
      } catch(e) { Swal.fire("Error", e.toString(), "error"); }
      showLoading(false);
@@ -448,23 +455,21 @@
       });
   }
 
-  // Misc
   function toggleSelect(id) {
      if(!navigator.onLine) return Swal.fire("Offline", "Go online to pickup", "info");
      if(selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
      document.getElementById('selectedCount').innerText = selectedIds.size;
      document.getElementById('btnPickup').classList.toggle('d-none', selectedIds.size===0);
   }
-  function openSignModal() { bootstrap.Modal.getOrCreateInstance(document.getElementById('signModal')).show(); signaturePad.clear(); }
-  function showLoading(s) { document.getElementById('loadingOverlay').style.display = s ? 'flex' : 'none'; }
-  function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
-  function compressImage(file, q, cb) { const r = new FileReader(); r.readAsDataURL(file); r.onload = e => { const i = new Image(); i.src = e.target.result; i.onload = () => { const c = document.createElement('canvas'); const max=800; let w=i.width, h=i.height; if(w>max){h=Math.round(h*(max/w));w=max;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); cb(c.toDataURL('image/jpeg', q).split(',')[1]); } } }
   function previewPhoto(e) { if(e.target.files[0]) { const r = new FileReader(); r.onload=ev=>document.getElementById('previewImg').src=ev.target.result; r.readAsDataURL(e.target.files[0]); document.getElementById('photoPreview').classList.remove('d-none'); } }
   function resetForm() { document.getElementById('inputUnit').value=''; document.getElementById('inputPhoto').value=''; document.getElementById('photoPreview').classList.add('d-none'); selectedResident=null; }
   function updateSyncUI() { const q = JSON.parse(localStorage.getItem('p_sync_queue') || '[]'); const b = document.getElementById('syncCountBadge'); b.innerText = q.length; b.style.display = q.length>0 ? 'block':'none'; }
   function toggleManualEntry() { const m = document.getElementById('chkManualEntry').checked; document.getElementById('areaSearch').classList.toggle('d-none', m); document.getElementById('areaManual').classList.toggle('d-none', !m); }
   function checkNetworkStatus() { document.getElementById('offlineBanner').style.display = navigator.onLine ? 'none' : 'block'; }
   function switchTab(t, el) { document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active')); el.classList.add('active'); ['receive', 'pickup', 'history'].forEach(id => document.getElementById('tab-'+id).style.display = (id === t ? 'block' : 'none')); if(t==='pickup' && navigator.onLine) forceUpdateCache(true); if(t==='history') searchHistory(); }
+  function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
+  function compressImage(file, q, cb) { const r = new FileReader(); r.readAsDataURL(file); r.onload = e => { const i = new Image(); i.src = e.target.result; i.onload = () => { const c = document.createElement('canvas'); const max=800; let w=i.width, h=i.height; if(w>max){h=Math.round(h*(max/w));w=max;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); cb(c.toDataURL('image/jpeg', q).split(',')[1]); } } }
 </script>
 </body>
 </html>
+
