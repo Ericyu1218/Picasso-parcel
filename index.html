@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-  <title>Picasso PWA V3.6</title>
+  <title>Picasso Parcel System V3.7</title>
   
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#f8f9fa">
-  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2965/2965302.png">
+  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Ericyu1218/Picasso-parcel/refs/heads/main/Parcel%20icon.png">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -43,7 +43,6 @@
     .nav-link { color: #adb5bd; border: none; background: none; font-size: 0.75rem; flex: 1; padding-top: 10px; text-align: center; text-decoration: none; cursor: pointer; }
     .nav-link.active { color: var(--primary-color); font-weight: bold; }
     
-    /* 🟢 Canvas Fix: Ensure touch-action is none */
     #signature-pad { border: 2px dashed #ccc; background: white; width: 100%; height: 250px; touch-action: none; border-radius: 8px; display: block; }
     
     #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
@@ -66,7 +65,7 @@
 
 <div class="app-header">
   <div class="d-flex align-items-center">
-    <div class="app-title me-2">PICASSO V3.6</div>
+    <div class="app-title me-2">PICASSO PARCEL SYSTEM V3.7</div>
     <button id="installBtn" class="btn btn-sm btn-outline-primary" onclick="installPWA()">Install</button>
   </div>
   <div class="d-flex align-items-center">
@@ -90,6 +89,7 @@
   <div class="offcanvas-body bg-light">
     <div class="d-grid gap-2 mb-3">
         <button class="btn btn-primary fw-bold" onclick="forceFullSync()">🔄 Force Full Sync</button>
+        <button class="btn btn-outline-danger btn-sm" onclick="clearSystemKey()">🔐 Reset System PIN</button>
     </div>
     <div class="d-flex justify-content-between align-items-center mb-2">
         <span class="text-muted small fw-bold" id="invTotalBadge">Total: 0</span>
@@ -97,7 +97,7 @@
     <div id="invVisualizerArea"><div class="text-center text-muted py-5">No Data</div></div>
     <div class="mt-4 pt-4 border-top text-center text-muted small">
        <p id="cacheStatusText">Checking Data...</p>
-       <small class="text-muted">V3.6 Mobile Fix</small>
+       <small class="text-muted">V3.7 Security Locked</small>
     </div>
   </div>
 </div>
@@ -169,6 +169,9 @@
 <script>
   const API_URL = "https://script.google.com/macros/s/AKfycbwcHL0r_GEV8v2vfjwviL8n-kDZTDfUY0-7D1c8NHu7-oTi0NbnxS_I09jC5ooWU0w61g/exec";
 
+  // 🟢 密鑰存取變數
+  let SYSTEM_KEY = localStorage.getItem('p_api_key') || "";
+
   // --- Global Helpers ---
   function showLoading(s, text="Processing...") { 
     const el = document.getElementById('loadingOverlay');
@@ -178,34 +181,78 @@
     }
   }
   
-  // 🟢 Mobile Friendly Resize Canvas
   function resizeCanvas() {
     const canvas = document.getElementById('signature-pad');
     if (!canvas || !signaturePad) return;
-    
-    // Fix for high DPI screens
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    
-    // Ensure canvas has dimension
     if (canvas.offsetWidth === 0) return; 
-
     canvas.width = canvas.offsetWidth * ratio;
     canvas.height = canvas.offsetHeight * ratio;
     canvas.getContext("2d").scale(ratio, ratio);
-    
-    // Don't clear here, allows resize without losing data if needed, 
-    // but usually we clear on open.
   }
   
   function openSignModal() { 
     const el = document.getElementById('signModal');
     const modal = bootstrap.Modal.getOrCreateInstance(el);
     modal.show(); 
-    // 🟢 Critical Fix: Delay resize to ensure modal is rendered on mobile
     setTimeout(() => {
         resizeCanvas();
         if(signaturePad) signaturePad.clear();
     }, 500); 
+  }
+
+  // --- 🟢 核心 API 調用 (整合 PIN 驗證) ---
+  async function callApi(action, payload = null, method = 'GET') {
+    // 若無 PIN，則彈窗要求輸入
+    if (!SYSTEM_KEY) {
+        const { value: key } = await Swal.fire({
+            title: 'System Locked 🔒',
+            input: 'password',
+            inputLabel: 'Enter Access PIN (Check Spreadsheet Config)',
+            inputPlaceholder: 'Type PIN...',
+            allowOutsideClick: false,
+            inputValidator: (value) => { if (!value) return 'PIN is required!' }
+        });
+        if (key) {
+            SYSTEM_KEY = key;
+            localStorage.setItem('p_api_key', key);
+        }
+    }
+
+    let url = `${API_URL}?action=${action}&key=${encodeURIComponent(SYSTEM_KEY)}`;
+    let options = { method: method };
+
+    if (method === 'POST') {
+        if (!payload) payload = {};
+        payload.key = SYSTEM_KEY; 
+        options.body = JSON.stringify(payload);
+        options.headers = { "Content-Type": "text/plain;charset=utf-8" };
+    } else if (payload && method === 'GET') {
+        url += `&q=${encodeURIComponent(payload)}`;
+    }
+
+    try {
+        const response = await fetch(url, options);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await response.json();
+        
+        // 驗證失敗處理
+        if (json.error && json.error.includes("Access Denied")) {
+            localStorage.removeItem('p_api_key');
+            SYSTEM_KEY = "";
+            Swal.fire("Access Denied", "Invalid PIN. Refresh and try again.", "error");
+            throw new Error("Auth Failed");
+        }
+        return json;
+    } catch (error) {
+        console.error("API Error:", error);
+        throw error;
+    }
+  }
+
+  function clearSystemKey() {
+      localStorage.removeItem('p_api_key');
+      location.reload();
   }
 
   // --- Main Logic ---
@@ -222,7 +269,6 @@
     if(canvas) {
         signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(255, 255, 255)' });
         const m = document.getElementById('signModal');
-        // Add listener but rely on openSignModal for initial size
         if(m) m.addEventListener('shown.bs.modal', resizeCanvas);
     }
     document.getElementById('inputUnit').addEventListener('input', handleUnitSearch);
@@ -245,7 +291,6 @@
       if (navigator.onLine) processSyncQueue();
       const now = Date.now();
       if (isSyncing && (now - lastSyncTime > 30000)) {
-          console.warn("Watchdog: Reset");
           isSyncing = false; 
           document.getElementById('syncStatus').className = 'sync-status sync-idle me-3';
           processSyncQueue();
@@ -268,7 +313,7 @@
 
   async function registerSW() {
     if ('serviceWorker' in navigator) {
-      try { await navigator.serviceWorker.register('sw.js?v=3.6'); } catch(e){}
+      try { await navigator.serviceWorker.register('sw.js?v=3.7'); } catch(e){}
     }
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault(); deferredPrompt = e;
@@ -277,20 +322,6 @@
   }
   function installPWA() {
     if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.then((c) => { if(c.outcome==='accepted') document.getElementById('installBtn').style.display='none'; }); }
-  }
-
-  async function callApi(action, payload = null, method = 'GET') {
-    let url = `${API_URL}?action=${action}`;
-    let options = { method: method };
-    if (method === 'POST') {
-        options.body = JSON.stringify(payload);
-        options.headers = { "Content-Type": "text/plain;charset=utf-8" };
-    } else if (payload && method === 'GET') {
-        url += `&q=${encodeURIComponent(payload)}`;
-    }
-    const response = await fetch(url, options);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
   }
 
   function loadFromCache() {
@@ -316,13 +347,11 @@
       if (!navigator.onLine) return;
       if (!silent) showLoading(true, "Syncing Data...");
       try {
-          const [res, conf, inv] = await Promise.all([
-              callApi('getResidents'),
-              callApi('getConfig'),
-              callApi('getPending')
-          ]);
+          const res = await callApi('getResidents');
           residentData = res; localStorage.setItem('p_residents', JSON.stringify(res));
+          const conf = await callApi('getConfig');
           config = conf; localStorage.setItem('p_config', JSON.stringify(conf)); applyConfig(conf);
+          const inv = await callApi('getPending');
           allParcels = inv; localStorage.setItem('p_inventory', JSON.stringify(inv));
           renderPickupList(inv); updateInventoryMenu(inv);
           document.getElementById('cacheStatusText').innerHTML = `✅ Synced (${res.length})`;
@@ -338,7 +367,6 @@
       const photo = document.getElementById('inputPhoto');
       if (!isManual && !selectedResident) { Swal.fire("Select resident", "", "warning"); return; }
       if (photo.files.length === 0) { Swal.fire("Take photo", "", "warning"); return; }
-
       showLoading(true, "Processing Image...");
       try {
           compressImage(photo.files[0], 0.6, function(base64) {
@@ -381,21 +409,16 @@
   }
 
   function finishPickupOffline() {
-     // 🟢 Check if user has actually signed
      if (signaturePad.isEmpty()) return Swal.fire("Signature Required", "", "warning");
-     
      const sign = signaturePad.toDataURL().split(',')[1];
      bootstrap.Modal.getInstance(document.getElementById('signModal')).hide();
-     
      const idsToPickup = Array.from(selectedIds);
      allParcels = allParcels.filter(p => !selectedIds.has(p.id));
      localStorage.setItem('p_inventory', JSON.stringify(allParcels));
      renderPickupList(allParcels); updateInventoryMenu(allParcels);
-     
      let queue = getQueue();
      queue.push({ type: 'pickup', data: { ids: idsToPickup, signBase64: sign }, id: generateUUID() });
      saveQueue(queue);
-     
      selectedIds.clear();
      document.getElementById('btnPickup').classList.add('d-none');
      updateSyncUI();
@@ -413,11 +436,9 @@
           document.getElementById('syncStatus').className = 'sync-status sync-idle me-3'; 
           return; 
       }
-
       isSyncing = true;
       lastSyncTime = Date.now();
       document.getElementById('syncStatus').className = 'sync-status sync-uploading me-3';
-      
       const task = queue[0];
       try {
           let res;
@@ -427,9 +448,9 @@
           if (res && res.success) {
               queue.shift(); saveQueue(queue); updateSyncUI();
               setTimeout(() => { isSyncing = false; processSyncQueue(); }, 500); 
-          } else { console.error("Task failed", res); isSyncing = false; }
+          } else { isSyncing = false; }
       } catch (e) {
-          console.error("Net error", e); isSyncing = false; updateNetworkStatus();
+          isSyncing = false; updateNetworkStatus();
       }
   }
 
@@ -511,9 +532,7 @@
               const c = document.createElement('canvas'); const max=800; let w=i.width, h=i.height; if(w>max){h=Math.round(h*(max/w));w=max;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); 
               cb(c.toDataURL('image/jpeg', q).split(',')[1]); 
           };
-          i.onerror = () => { showLoading(false); Swal.fire("Error","Bad Image","error"); };
       };
-      r.onerror = () => { showLoading(false); Swal.fire("Error","Read Failed","error"); };
   }
 </script>
 </body>
