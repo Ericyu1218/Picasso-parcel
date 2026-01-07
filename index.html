@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-  <title>Picasso PWA V3.2 (Offline Pro)</title>
+  <title>Picasso PWA V3.3 (Stable)</title>
   
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#f8f9fa">
@@ -21,8 +21,7 @@
     .app-title { font-size: 0.9rem; font-weight: 700; letter-spacing: 1px; margin: 0; text-transform: uppercase; line-height: 1.1; }
     .menu-btn { border: none; background: transparent; font-size: 1.5rem; color: #333; padding: 0 10px; cursor: pointer; }
     
-    /* Sync Status Indicator */
-    .sync-status { font-size: 0.8rem; font-weight: bold; padding: 4px 8px; border-radius: 12px; display: flex; align-items: center; gap: 5px; }
+    .sync-status { font-size: 0.8rem; font-weight: bold; padding: 4px 8px; border-radius: 12px; display: flex; align-items: center; gap: 5px; transition: all 0.3s; }
     .sync-idle { color: #aaa; background: #eee; }
     .sync-uploading { color: #fff; background: #0d6efd; animation: pulse 1.5s infinite; }
     .sync-offline { color: #fff; background: #666; }
@@ -45,7 +44,6 @@
     #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
     .email-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 10px; border-radius: 8px; font-size: 0.85rem; display: none; margin-bottom: 15px; }
     
-    /* Inventory Visuals */
     .inv-section { margin-bottom: 20px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; }
     .inv-header { background: #f2f2f2; padding: 10px 15px; font-weight: bold; border-left: 5px solid #333; font-size: 0.95rem; color: #333; display: flex; justify-content: space-between; align-items: center; }
     .inv-body { padding: 5px 15px; }
@@ -66,7 +64,6 @@
     <div class="app-title me-2">PICASSO</div>
     <button id="installBtn" class="btn btn-sm btn-outline-primary" onclick="installPWA()">Install</button>
   </div>
-  
   <div class="d-flex align-items-center">
     <div id="syncStatus" class="sync-status sync-idle me-3">
         <span id="syncIcon">☁️</span> <span id="queueCount">0</span>
@@ -87,7 +84,7 @@
   </div>
   <div class="offcanvas-body bg-light">
     <div class="d-grid gap-2 mb-3">
-        <button class="btn btn-primary fw-bold" onclick="forceFullSync()">🔄 Force Full Sync (Online Only)</button>
+        <button class="btn btn-primary fw-bold" onclick="forceFullSync()">🔄 Force Full Sync</button>
     </div>
     <div class="d-flex justify-content-between align-items-center mb-2">
         <span class="text-muted small fw-bold" id="invTotalBadge">Total: 0</span>
@@ -95,7 +92,7 @@
     <div id="invVisualizerArea"><div class="text-center text-muted py-5">No Data</div></div>
     <div class="mt-4 pt-4 border-top text-center text-muted small">
        <p id="cacheStatusText">Checking Data...</p>
-       <small class="text-muted">V3.2 Offline Pro</small>
+       <small class="text-muted">V3.3 Stable</small>
     </div>
   </div>
 </div>
@@ -141,7 +138,6 @@
     <input type="text" class="form-control border-start-0 ps-0" id="searchBox" placeholder="Search Unit or Name..." onkeyup="filterParcels()">
   </div>
   <div id="parcelListArea" class="pb-5"></div>
-  
   <button id="btnPickup" class="btn btn-primary position-fixed shadow-lg py-3 fw-bold d-none" style="bottom:85px; left:20px; right:20px; z-index:999" onclick="openSignModal()">
     SIGN & PICKUP (<span id="selectedCount">0</span>)
   </button>
@@ -194,9 +190,8 @@
 
   window.onload = function() {
     registerSW();
-    updateNetworkStatus(); // Initial check
+    updateNetworkStatus();
     
-    // UI Init
     const canvas = document.getElementById('signature-pad');
     if(canvas) {
         signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(255, 255, 255)' });
@@ -206,14 +201,11 @@
     document.getElementById('inputUnit').addEventListener('input', handleUnitSearch);
     document.getElementById('inputPhoto').addEventListener('change', previewPhoto);
 
-    // Data Load
     loadFromCache();
-    
-    // Auto Update if Online (Background, Silent)
     if (navigator.onLine) forceUpdateCache(true);
     
     updateSyncUI();
-    setInterval(processSyncQueue, 5000); // Check queue every 5s
+    setInterval(processSyncQueue, 5000); 
   };
 
   window.addEventListener('online', updateNetworkStatus);
@@ -225,7 +217,7 @@
       if (navigator.onLine) {
           el.className = 'sync-status sync-idle me-3';
           icon.innerText = '☁️';
-          processSyncQueue(); // Try sync immediately
+          processSyncQueue();
       } else {
           el.className = 'sync-status sync-offline me-3';
           icon.innerText = '📡 Offline';
@@ -234,7 +226,7 @@
 
   async function registerSW() {
     if ('serviceWorker' in navigator) {
-      try { await navigator.serviceWorker.register('sw.js?v=3.2'); } catch(e){}
+      try { await navigator.serviceWorker.register('sw.js?v=3.3'); } catch(e){}
     }
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault(); deferredPrompt = e;
@@ -259,13 +251,11 @@
     return await response.json();
   }
 
-  // --- Data & Cache ---
   function loadFromCache() {
     const r = localStorage.getItem('p_residents');
     const c = localStorage.getItem('p_config');
     const i = localStorage.getItem('p_inventory');
     const statusEl = document.getElementById('cacheStatusText');
-    
     if (r) {
         residentData = JSON.parse(r);
         statusEl.innerHTML = `✅ Cached (${residentData.length} units)`;
@@ -276,34 +266,28 @@
   }
 
   async function forceFullSync() {
-      // This is a manual "Hard Sync" button
       if (!navigator.onLine) return Swal.fire("Offline", "Connect to internet first.", "warning");
       await forceUpdateCache(false);
   }
 
   async function forceUpdateCache(silent = false) {
       if (!navigator.onLine) return;
-      if (!silent) showLoading(true, "Downloading Data...");
+      if (!silent) showLoading(true, "Syncing Data...");
       try {
-          // Parallel fetch for speed
           const [res, conf, inv] = await Promise.all([
               callApi('getResidents'),
               callApi('getConfig'),
               callApi('getPending')
           ]);
-
           residentData = res; localStorage.setItem('p_residents', JSON.stringify(res));
           config = conf; localStorage.setItem('p_config', JSON.stringify(conf)); applyConfig(conf);
           allParcels = inv; localStorage.setItem('p_inventory', JSON.stringify(inv));
-          
           renderPickupList(inv); updateInventoryMenu(inv);
-          
           document.getElementById('cacheStatusText').innerHTML = `✅ Synced (${res.length})`;
           document.getElementById('cacheStatusText').className = "text-success fw-bold";
-          
           if (!silent) { showLoading(false); Swal.fire("Synced!", "", "success"); }
       } catch (e) {
-          if (!silent) { showLoading(false); Swal.fire("Error", "Sync failed. Try again.", "error"); }
+          if (!silent) { showLoading(false); Swal.fire("Error", "Sync failed.", "error"); }
       }
   }
 
@@ -316,7 +300,6 @@
 
       showLoading(true, "Processing Image...");
       
-      // Error handling for image compression
       try {
           compressImage(photo.files[0], 0.6, function(base64) {
               const item = {
@@ -331,7 +314,7 @@
               tempBatch.push(item);
               renderTempList();
               resetForm();
-              showLoading(false);
+              showLoading(false); // MUST CLOSE
           });
       } catch (e) {
           showLoading(false);
@@ -339,37 +322,23 @@
       }
   }
 
-  // 🔴 V3.2 Change: Just Queue, Don't Sync yet
   function queueBatchForSync() {
       let queue = getQueue();
-      // Add 'receive' tasks to queue
-      tempBatch.forEach(item => {
-          queue.push({ type: 'receive', data: item, id: generateUUID() });
-      });
+      tempBatch.forEach(item => { queue.push({ type: 'receive', data: item, id: generateUUID() }); });
       saveQueue(queue);
-      
       tempBatch = [];
       renderTempList();
       updateSyncUI();
-      
-      Swal.fire({
-          icon: 'success',
-          title: 'Saved to Queue',
-          text: 'Data is safe. Will upload automatically when online.',
-          timer: 2000,
-          showConfirmButton: false
-      });
-      
-      processSyncQueue(); // Trigger background sync
+      Swal.fire({ icon: 'success', title: 'Saved to Queue', timer: 1500, showConfirmButton: false });
+      processSyncQueue();
   }
 
-  // --- Pickup Logic (Offline First) ---
+  // --- Pickup Logic ---
   function toggleSelect(id) {
-     // Allow offline selection!
      if(selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
      document.getElementById('selectedCount').innerText = selectedIds.size;
      document.getElementById('btnPickup').classList.toggle('d-none', selectedIds.size===0);
-     renderPickupList(allParcels); // Re-render to show highlighting
+     renderPickupList(allParcels);
   }
 
   function finishPickupOffline() {
@@ -377,80 +346,54 @@
      const sign = signaturePad.toDataURL().split(',')[1];
      bootstrap.Modal.getInstance(document.getElementById('signModal')).hide();
      
-     // 1. Optimistic Update (Update UI immediately)
+     // 1. Optimistic Update
      const idsToPickup = Array.from(selectedIds);
      allParcels = allParcels.filter(p => !selectedIds.has(p.id));
-     localStorage.setItem('p_inventory', JSON.stringify(allParcels)); // Update Cache
+     localStorage.setItem('p_inventory', JSON.stringify(allParcels));
+     renderPickupList(allParcels); updateInventoryMenu(allParcels);
      
-     renderPickupList(allParcels);
-     updateInventoryMenu(allParcels);
-     
-     // 2. Add to Sync Queue
+     // 2. Queue
      let queue = getQueue();
-     queue.push({ 
-         type: 'pickup', 
-         data: { ids: idsToPickup, signBase64: sign },
-         id: generateUUID()
-     });
+     queue.push({ type: 'pickup', data: { ids: idsToPickup, signBase64: sign }, id: generateUUID() });
      saveQueue(queue);
      
      selectedIds.clear();
      document.getElementById('btnPickup').classList.add('d-none');
      updateSyncUI();
-
-     Swal.fire("Picked Up!", "Saved offline. Will sync later.", "success");
+     Swal.fire("Picked Up!", "Saved locally.", "success");
      processSyncQueue();
   }
 
-  // --- Background Sync Engine (The Heart of V3.2) ---
+  // --- Sync Engine ---
   function getQueue() { return JSON.parse(localStorage.getItem('p_global_queue') || '[]'); }
   function saveQueue(q) { localStorage.setItem('p_global_queue', JSON.stringify(q)); }
 
   async function processSyncQueue() {
       if (isSyncing || !navigator.onLine) return;
-      
       let queue = getQueue();
-      if (queue.length === 0) {
-          document.getElementById('syncStatus').className = 'sync-status sync-idle me-3';
-          return;
-      }
+      if (queue.length === 0) { document.getElementById('syncStatus').className = 'sync-status sync-idle me-3'; return; }
 
       isSyncing = true;
-      document.getElementById('syncStatus').className = 'sync-status sync-uploading me-3'; // Blue pulsing
-      
-      const task = queue[0]; // Take first task
+      document.getElementById('syncStatus').className = 'sync-status sync-uploading me-3';
+      const task = queue[0];
       
       try {
           let res;
-          if (task.type === 'receive') {
-              res = await callApi('receive', task.data, 'POST');
-          } else if (task.type === 'pickup') {
-              res = await callApi('pickup', task.data, 'POST');
-          }
+          if (task.type === 'receive') res = await callApi('receive', task.data, 'POST');
+          else if (task.type === 'pickup') res = await callApi('pickup', task.data, 'POST');
 
           if (res && res.success) {
-              queue.shift(); // Remove on success
-              saveQueue(queue);
-              updateSyncUI();
-              // Small delay to prevent rate limit
+              queue.shift(); saveQueue(queue); updateSyncUI();
               setTimeout(() => { isSyncing = false; processSyncQueue(); }, 500); 
-          } else {
-              console.error("Task failed", res);
-              isSyncing = false; // Stop on logic error to prevent infinite loop of bad request
-          }
+          } else { console.error("Task failed", res); isSyncing = false; }
       } catch (e) {
-          console.error("Network error, retry later", e);
-          isSyncing = false; // Stop on network error
-          updateNetworkStatus(); // Update UI to show offline?
+          console.error("Net error", e); isSyncing = false; updateNetworkStatus();
       }
   }
 
-  function updateSyncUI() {
-      const q = getQueue();
-      document.getElementById('queueCount').innerText = q.length;
-  }
+  function updateSyncUI() { document.getElementById('queueCount').innerText = getQueue().length; }
 
-  // --- Misc ---
+  // --- Misc Helpers ---
   function applyConfig(c) {
       const l = document.getElementById('inputLocation'), r = document.getElementById('inputCourier');
       l.innerHTML=''; r.innerHTML='';
@@ -493,14 +436,19 @@
       const c = document.getElementById('invVisualizerArea'); c.innerHTML = '';
       const g = {}; data.forEach(p => { const l=p.location||'Other'; if(!g[l])g[l]=[]; g[l].push(p); });
       Object.keys(g).sort().forEach(loc => {
-          let h = `<div class="inv-section"><div class="inv-header">${loc} <span class="badge bg-secondary">${g[loc].length}</span></div><div class="inv-body"><div class="inv-chips">`;
-          g[loc].forEach(p => { h += `<div class="inv-chip" onclick="this.classList.toggle('checked')">${p.unit}</div>`; });
+          // Sort by unit number
+          const sorted = g[loc].sort((a,b) => {
+             const uA = parseInt(String(a.unit).replace(/\D/g,'')) || 0;
+             const uB = parseInt(String(b.unit).replace(/\D/g,'')) || 0;
+             return uA - uB;
+          });
+          
+          let h = `<div class="inv-section"><div class="inv-header">${loc} <span class="badge bg-secondary">${sorted.length}</span></div><div class="inv-body"><div class="inv-chips">`;
+          sorted.forEach(p => { h += `<div class="inv-chip" onclick="this.classList.toggle('checked')">${p.unit}</div>`; });
           c.innerHTML += h + `</div></div></div>`;
       });
       document.getElementById('invTotalBadge').innerText = `Total: ${data.length}`;
   }
-  
-  // Search History
   function debouncedHistorySearch() { clearTimeout(historyTimeout); historyTimeout = setTimeout(searchHistory, 500); }
   async function searchHistory() {
       if (!navigator.onLine) return document.getElementById('historyListArea').innerHTML = '<div class="text-center text-muted py-4">Offline: Cannot search history</div>';
@@ -511,19 +459,27 @@
           area.innerHTML += `<div class="card p-2 mb-2 shadow-sm"><div class="d-flex justify-content-between"><div><b>${p.unit}</b> ${p.name}<br><small>${p.courier} | ${p.timeOut}</small></div><button class="btn btn-sm btn-outline-primary" onclick="restore('${p.id}')">Restore</button></div></div>`;
       });
   }
-  async function restore(id) {
-     if(confirm("Restore?")) { showLoading(true); await callApi('restore', null, 'POST?action=restore&id='+id); showLoading(false); searchHistory(); }
-  }
-  function filterParcels() {
-    const q = document.getElementById('searchBox').value.toLowerCase().trim();
-    renderPickupList(allParcels.filter(p => String(p.unit).toLowerCase().includes(q) || String(p.name).toLowerCase().includes(q)));
-  }
+  async function restore(id) { if(confirm("Restore?")) { showLoading(true); await callApi('restore', null, 'POST?action=restore&id='+id); showLoading(false); searchHistory(); } }
+  function filterParcels() { const q = document.getElementById('searchBox').value.toLowerCase().trim(); renderPickupList(allParcels.filter(p => String(p.unit).toLowerCase().includes(q) || String(p.name).toLowerCase().includes(q))); }
   function previewPhoto(e) { if(e.target.files[0]) { const r = new FileReader(); r.onload=ev=>document.getElementById('previewImg').src=ev.target.result; r.readAsDataURL(e.target.files[0]); document.getElementById('photoPreview').classList.remove('d-none'); } }
   function resetForm() { document.getElementById('inputUnit').value=''; document.getElementById('inputPhoto').value=''; document.getElementById('photoPreview').classList.add('d-none'); selectedResident=null; }
   function toggleManualEntry() { const m = document.getElementById('chkManualEntry').checked; document.getElementById('areaSearch').classList.toggle('d-none', m); document.getElementById('areaManual').classList.toggle('d-none', !m); }
   function switchTab(t, el) { document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active')); el.classList.add('active'); ['receive', 'pickup', 'history'].forEach(id => document.getElementById('tab-'+id).style.display = (id === t ? 'block' : 'none')); if(t==='history') searchHistory(); }
   function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
-  function compressImage(file, q, cb) { const r = new FileReader(); r.readAsDataURL(file); r.onload = e => { const i = new Image(); i.src = e.target.result; i.onload = () => { const c = document.createElement('canvas'); const max=800; let w=i.width, h=i.height; if(w>max){h=Math.round(h*(max/w));w=max;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); cb(c.toDataURL('image/jpeg', q).split(',')[1]); } } }
+  function compressImage(file, q, cb) { 
+      const r = new FileReader(); 
+      r.readAsDataURL(file); 
+      r.onload = e => { 
+          const i = new Image(); 
+          i.src = e.target.result; 
+          i.onload = () => { 
+              const c = document.createElement('canvas'); const max=800; let w=i.width, h=i.height; if(w>max){h=Math.round(h*(max/w));w=max;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); 
+              cb(c.toDataURL('image/jpeg', q).split(',')[1]); 
+          };
+          i.onerror = () => { showLoading(false); Swal.fire("Error","Bad Image","error"); };
+      };
+      r.onerror = () => { showLoading(false); Swal.fire("Error","Read Failed","error"); };
+  }
 </script>
 </body>
 </html>
