@@ -261,7 +261,7 @@
   let deferredPrompt;
   let lastSyncTime = 0;
 
-  window.onload = function() {
+window.onload = async function() {
     registerSW();
     updateNetworkStatus();
     
@@ -274,8 +274,18 @@
     document.getElementById('inputUnit').addEventListener('input', handleUnitSearch);
     document.getElementById('inputPhoto').addEventListener('change', previewPhoto);
 
+    // 1. 載入本地快取介面
     loadFromCache();
-    if (navigator.onLine) forceUpdateCache(true);
+
+    // 2. 🟢 核心修正：啟動時強制檢查一次 PIN 碼
+    // 如果沒有密碼，這會觸發彈窗；如果有密碼，它會順便更新一次資料
+    if (navigator.onLine) {
+        try {
+            await forceUpdateCache(true); 
+        } catch(e) {
+            console.log("Initial sync failed or cancelled.");
+        }
+    }
     
     updateSyncUI();
     setInterval(heartbeatCheck, 5000);
@@ -537,3 +547,4 @@
 </script>
 </body>
 </html>
+
