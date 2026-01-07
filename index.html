@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-  <title>Picasso Parcel PWA</title>
+  <title>Picasso PWA V3.2 (Offline Pro)</title>
   
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#f8f9fa">
@@ -16,12 +16,17 @@
   <style>
     :root { --primary-color: #333; --accent-color: #0d6efd; --bg-color: #f8f9fa; --check-color: #198754; }
     body { background-color: var(--bg-color); padding-bottom: 80px; font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; }
-
-    .sync-badge { position: absolute; top: -5px; right: -5px; background-color: #ff3b30; color: white; border-radius: 50%; padding: 2px 6px; font-size: 0.7rem; font-weight: bold; display:none; border: 2px solid white; }
+    
     .app-header { background-color: white; color: #333; padding: 10px 15px; position: sticky; top: 0; z-index: 1020; display: flex; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08); justify-content: space-between; }
-    .app-logo { height: 32px; margin-right: 12px; border-right: 1px solid #ddd; padding-right: 12px; }
     .app-title { font-size: 0.9rem; font-weight: 700; letter-spacing: 1px; margin: 0; text-transform: uppercase; line-height: 1.1; }
     .menu-btn { border: none; background: transparent; font-size: 1.5rem; color: #333; padding: 0 10px; cursor: pointer; }
+    
+    /* Sync Status Indicator */
+    .sync-status { font-size: 0.8rem; font-weight: bold; padding: 4px 8px; border-radius: 12px; display: flex; align-items: center; gap: 5px; }
+    .sync-idle { color: #aaa; background: #eee; }
+    .sync-uploading { color: #fff; background: #0d6efd; animation: pulse 1.5s infinite; }
+    .sync-offline { color: #fff; background: #666; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
     .custom-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 1050; background: white; border: 1px solid #ddd; border-radius: 0 0 8px 8px; max-height: 250px; overflow-y: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); display: none; }
     .dropdown-item { padding: 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
@@ -39,8 +44,8 @@
     #signature-pad { border: 2px dashed #ccc; background: white; width: 100%; height: 250px; touch-action: none; border-radius: 8px; }
     #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
     .email-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 10px; border-radius: 8px; font-size: 0.85rem; display: none; margin-bottom: 15px; }
-
-    /* Inventory Chips */
+    
+    /* Inventory Visuals */
     .inv-section { margin-bottom: 20px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; }
     .inv-header { background: #f2f2f2; padding: 10px 15px; font-weight: bold; border-left: 5px solid #333; font-size: 0.95rem; color: #333; display: flex; justify-content: space-between; align-items: center; }
     .inv-body { padding: 5px 15px; }
@@ -48,32 +53,23 @@
     .inv-row:last-child { border-bottom: none; }
     .inv-label { width: 100px; min-width: 100px; font-size: 0.75rem; color: #888; font-weight: 600; padding-top: 4px; }
     .inv-chips { display: flex; flex-wrap: wrap; gap: 6px; flex-grow: 1; }
-    .inv-chip { 
-      background: #fff; border: 1px solid #ccc; color: #333; 
-      padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500; 
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05); min-width: 45px; text-align: center;
-      cursor: pointer; transition: all 0.2s; 
-    }
-    .inv-chip:active { transform: scale(0.95); }
-    .inv-chip.checked { background-color: var(--check-color); color: white; border-color: var(--check-color); box-shadow: 0 2px 4px rgba(25, 135, 84, 0.3); }
-
-    #offlineBanner { display: none; background: #333; color: #fff; text-align: center; padding: 4px; font-size: 0.75rem; font-weight: bold; }
+    .inv-chip { background: #fff; border: 1px solid #ccc; color: #333; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,0.05); min-width: 45px; text-align: center; cursor: pointer; transition: all 0.2s; }
+    .inv-chip.checked { background-color: var(--check-color); color: white; border-color: var(--check-color); }
+    
     #installBtn { display: none; }
   </style>
 </head>
 <body>
 
-<div id="offlineBanner">📡 OFFLINE MODE</div>
-
 <div class="app-header">
   <div class="d-flex align-items-center">
-    <div class="app-title me-2">PICASSO<br>PARCEL PWA</div>
-    <button id="installBtn" class="btn btn-sm btn-outline-primary" onclick="installPWA()">Install App</button>
+    <div class="app-title me-2">PICASSO</div>
+    <button id="installBtn" class="btn btn-sm btn-outline-primary" onclick="installPWA()">Install</button>
   </div>
+  
   <div class="d-flex align-items-center">
-    <div class="position-relative me-3" id="syncStatusIcon">
-      <span style="font-size: 1.5rem;">☁️</span>
-      <span id="syncCountBadge" class="sync-badge">0</span>
+    <div id="syncStatus" class="sync-status sync-idle me-3">
+        <span id="syncIcon">☁️</span> <span id="queueCount">0</span>
     </div>
     <button class="menu-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#sideMenu">☰</button>
   </div>
@@ -81,17 +77,17 @@
 
 <div id="loadingOverlay">
   <div class="spinner-border text-primary"></div>
-  <div class="mt-2 fw-bold">Processing...</div>
+  <div class="mt-2 fw-bold" id="loadingText">Processing...</div>
 </div>
 
 <div class="offcanvas offcanvas-end w-100" tabindex="-1" id="sideMenu" style="max-width: 600px;">
   <div class="offcanvas-header bg-primary text-white">
-    <h5 class="offcanvas-title fw-bold">📦 Storage Visualizer</h5>
+    <h5 class="offcanvas-title fw-bold">📦 Tools & Storage</h5>
     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
   </div>
   <div class="offcanvas-body bg-light">
     <div class="d-grid gap-2 mb-3">
-        <button class="btn btn-primary fw-bold" onclick="forceUpdateCache()">🔄 Sync All Data (Residents + Inventory)</button>
+        <button class="btn btn-primary fw-bold" onclick="forceFullSync()">🔄 Force Full Sync (Online Only)</button>
     </div>
     <div class="d-flex justify-content-between align-items-center mb-2">
         <span class="text-muted small fw-bold" id="invTotalBadge">Total: 0</span>
@@ -99,7 +95,7 @@
     <div id="invVisualizerArea"><div class="text-center text-muted py-5">No Data</div></div>
     <div class="mt-4 pt-4 border-top text-center text-muted small">
        <p id="cacheStatusText">Checking Data...</p>
-       <small class="text-muted">Version 3.0 (GitHub PWA)</small>
+       <small class="text-muted">V3.2 Offline Pro</small>
     </div>
   </div>
 </div>
@@ -120,7 +116,6 @@
     <div id="areaManual" class="mb-3 d-none row g-2">
         <div class="col-4"><label class="small fw-bold text-muted">UNIT</label><input type="text" class="form-control" id="manualUnit" placeholder="Unit"></div>
         <div class="col-8"><label class="small fw-bold text-muted">NAME</label><input type="text" class="form-control" id="manualName" placeholder="Name"></div>
-        <div class="col-12"><small class="text-danger fw-bold">* Manual entries will NOT receive emails.</small></div>
     </div>
     <div class="row g-2 mb-3">
       <div class="col-6"><label class="small fw-bold text-muted">LOCATION</label><select class="form-select" id="inputLocation"></select></div>
@@ -133,8 +128,11 @@
     </div>
     <button class="btn btn-primary w-100 py-3 fw-bold shadow-sm" onclick="addParcelToList()">＋ ADD TO LIST</button>
   </div>
+  
   <div id="tempBatchArea"></div>
-  <button id="btnFinalSubmit" class="btn btn-dark w-100 py-3 mt-3 fw-bold shadow d-none" onclick="submitBatch()">CONFIRM (<span id="batchCount">0</span>)</button>
+  <button id="btnFinalSubmit" class="btn btn-dark w-100 py-3 mt-3 fw-bold shadow d-none" onclick="queueBatchForSync()">
+    💾 SAVE & QUEUE (<span id="batchCount">0</span>)
+  </button>
 </div>
 
 <div id="tab-pickup" class="container py-4" style="display:none;">
@@ -143,7 +141,10 @@
     <input type="text" class="form-control border-start-0 ps-0" id="searchBox" placeholder="Search Unit or Name..." onkeyup="filterParcels()">
   </div>
   <div id="parcelListArea" class="pb-5"></div>
-  <button id="btnPickup" class="btn btn-primary position-fixed shadow-lg py-3 fw-bold d-none" style="bottom:85px; left:20px; right:20px; z-index:999" onclick="openSignModal()">CONFIRM PICKUP (<span id="selectedCount">0</span>)</button>
+  
+  <button id="btnPickup" class="btn btn-primary position-fixed shadow-lg py-3 fw-bold d-none" style="bottom:85px; left:20px; right:20px; z-index:999" onclick="openSignModal()">
+    SIGN & PICKUP (<span id="selectedCount">0</span>)
+  </button>
 </div>
 
 <div id="tab-history" class="container py-4" style="display:none;">
@@ -160,22 +161,25 @@
   <button class="nav-link" onclick="switchTab('history', this)"><div>📜</div>History</button>
 </div>
 
-<div class="modal fade" id="signModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow"><div class="modal-header border-0"><h5 class="modal-title fw-bold">Sign Here</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center"><canvas id="signature-pad"></canvas><div class="text-end mt-2"><button class="btn btn-link text-muted btn-sm text-decoration-none" onclick="signaturePad.clear()">Clear</button></div></div><div class="modal-footer border-0"><button class="btn btn-dark w-100 py-3 fw-bold" onclick="processPickup()">CONFIRM</button></div></div></div></div>
+<div class="modal fade" id="signModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow"><div class="modal-header border-0"><h5 class="modal-title fw-bold">Sign Here</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center"><canvas id="signature-pad"></canvas><div class="text-end mt-2"><button class="btn btn-link text-muted btn-sm text-decoration-none" onclick="signaturePad.clear()">Clear</button></div></div><div class="modal-footer border-0"><button class="btn btn-dark w-100 py-3 fw-bold" onclick="finishPickupOffline()">CONFIRM PICKUP</button></div></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-  // 🟢 請在這裡貼上你刚刚 "重新部署" 後的新網址！
+  // 🟢 替換你的 API URL
   const API_URL = "https://script.google.com/macros/s/AKfycbwcHL0r_GEV8v2vfjwviL8n-kDZTDfUY0-7D1c8NHu7-oTi0NbnxS_I09jC5ooWU0w61g/exec";
 
-  let residentData = [], config = {}, tempBatch = [], allParcels = [], selectedIds = new Set();
-  let selectedResident = null, signaturePad = null, historyTimeout = null, isSyncing = false;
-  let deferredPrompt;
-
-  // 1. 定義 resizeCanvas (確保它在 window.onload 之前被定義)
+  // --- Global Helpers ---
+  function showLoading(s, text="Processing...") { 
+    const el = document.getElementById('loadingOverlay');
+    if (el) {
+        document.getElementById('loadingText').innerText = text;
+        el.style.display = s ? 'flex' : 'none';
+    }
+  }
   function resizeCanvas() {
     const canvas = document.getElementById('signature-pad');
-    if (!canvas || !signaturePad) return; // 錯誤保護
+    if (!canvas || !signaturePad) return;
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
     canvas.width = canvas.offsetWidth * ratio;
     canvas.height = canvas.offsetHeight * ratio;
@@ -183,297 +187,343 @@
     signaturePad.clear();
   }
 
-  // 2. 初始化
+  // --- Main Logic ---
+  let residentData = [], config = {}, tempBatch = [], allParcels = [], selectedIds = new Set();
+  let selectedResident = null, signaturePad = null, historyTimeout = null, isSyncing = false;
+  let deferredPrompt;
+
   window.onload = function() {
     registerSW();
-    checkNetworkStatus();
-
-    // 讀取快取
-    loadFromCache();
-
-    // 嘗試更新
-    if (navigator.onLine) {
-        forceUpdateCache(true); 
-    }
-
-    // UI 初始化
-    const canvas = document.getElementById('signature-pad');
-    if (canvas) {
-        signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(255, 255, 255)' });
-        // 綁定 Modal 事件
-        const modalEl = document.getElementById('signModal');
-        if(modalEl) modalEl.addEventListener('shown.bs.modal', resizeCanvas);
-    }
+    updateNetworkStatus(); // Initial check
     
+    // UI Init
+    const canvas = document.getElementById('signature-pad');
+    if(canvas) {
+        signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(255, 255, 255)' });
+        const m = document.getElementById('signModal');
+        if(m) m.addEventListener('shown.bs.modal', resizeCanvas);
+    }
     document.getElementById('inputUnit').addEventListener('input', handleUnitSearch);
     document.getElementById('inputPhoto').addEventListener('change', previewPhoto);
 
+    // Data Load
+    loadFromCache();
+    
+    // Auto Update if Online (Background, Silent)
+    if (navigator.onLine) forceUpdateCache(true);
+    
     updateSyncUI();
-    autoSyncProcess();
+    setInterval(processSyncQueue, 5000); // Check queue every 5s
   };
 
-  // 3. 註冊 SW
+  window.addEventListener('online', updateNetworkStatus);
+  window.addEventListener('offline', updateNetworkStatus);
+
+  function updateNetworkStatus() {
+      const el = document.getElementById('syncStatus');
+      const icon = document.getElementById('syncIcon');
+      if (navigator.onLine) {
+          el.className = 'sync-status sync-idle me-3';
+          icon.innerText = '☁️';
+          processSyncQueue(); // Try sync immediately
+      } else {
+          el.className = 'sync-status sync-offline me-3';
+          icon.innerText = '📡 Offline';
+      }
+  }
+
   async function registerSW() {
     if ('serviceWorker' in navigator) {
-      try {
-        // 加上 timestamp 防止瀏覽器死都不更新 sw.js
-        await navigator.serviceWorker.register('sw.js?v=' + new Date().getTime());
-        console.log('SW registered');
-      } catch (e) { console.log('SW failed', e); }
+      try { await navigator.serviceWorker.register('sw.js?v=3.2'); } catch(e){}
     }
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault(); deferredPrompt = e;
       document.getElementById('installBtn').style.display = 'block';
     });
   }
-
   function installPWA() {
-    if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then((choice) => {
-            if (choice.outcome === 'accepted') document.getElementById('installBtn').style.display = 'none';
-        });
-    }
+    if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.then((c) => { if(c.outcome==='accepted') document.getElementById('installBtn').style.display='none'; }); }
   }
 
-  // API 呼叫
   async function callApi(action, payload = null, method = 'GET') {
     let url = `${API_URL}?action=${action}`;
     let options = { method: method };
-
     if (method === 'POST') {
         options.body = JSON.stringify(payload);
         options.headers = { "Content-Type": "text/plain;charset=utf-8" };
     } else if (payload && method === 'GET') {
         url += `&q=${encodeURIComponent(payload)}`;
     }
-
-    try {
-        const response = await fetch(url, options);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return await response.json();
-    } catch (error) {
-        console.error("API Error:", error);
-        throw error;
-    }
+    const response = await fetch(url, options);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
   }
 
-  // --- 其他功能函式 (保持不變) ---
-  
+  // --- Data & Cache ---
   function loadFromCache() {
     const r = localStorage.getItem('p_residents');
     const c = localStorage.getItem('p_config');
     const i = localStorage.getItem('p_inventory');
     const statusEl = document.getElementById('cacheStatusText');
-
+    
     if (r) {
         residentData = JSON.parse(r);
-        statusEl.innerHTML = `✅ Cached Data (${residentData.length} units)`;
+        statusEl.innerHTML = `✅ Cached (${residentData.length} units)`;
         statusEl.className = "text-success fw-bold";
-    } else {
-        statusEl.innerHTML = `⚠️ No Data. Connect Internet!`;
-        statusEl.className = "text-danger fw-bold";
     }
     if (c) { config = JSON.parse(c); applyConfig(config); }
     if (i) { allParcels = JSON.parse(i); renderPickupList(allParcels); updateInventoryMenu(allParcels); }
   }
 
+  async function forceFullSync() {
+      // This is a manual "Hard Sync" button
+      if (!navigator.onLine) return Swal.fire("Offline", "Connect to internet first.", "warning");
+      await forceUpdateCache(false);
+  }
+
   async function forceUpdateCache(silent = false) {
-      if (!navigator.onLine) { if(!silent) Swal.fire("Offline", "No Internet", "warning"); return; }
-      if (!silent) showLoading(true);
-
+      if (!navigator.onLine) return;
+      if (!silent) showLoading(true, "Downloading Data...");
       try {
-          const res = await callApi('getResidents');
-          residentData = res;
-          localStorage.setItem('p_residents', JSON.stringify(res));
+          // Parallel fetch for speed
+          const [res, conf, inv] = await Promise.all([
+              callApi('getResidents'),
+              callApi('getConfig'),
+              callApi('getPending')
+          ]);
+
+          residentData = res; localStorage.setItem('p_residents', JSON.stringify(res));
+          config = conf; localStorage.setItem('p_config', JSON.stringify(conf)); applyConfig(conf);
+          allParcels = inv; localStorage.setItem('p_inventory', JSON.stringify(inv));
           
-          const conf = await callApi('getConfig');
-          config = conf;
-          localStorage.setItem('p_config', JSON.stringify(conf));
-          applyConfig(conf);
-
-          const inv = await callApi('getPending');
-          allParcels = inv;
-          localStorage.setItem('p_inventory', JSON.stringify(inv));
-          renderPickupList(inv); 
-          updateInventoryMenu(inv);
-
-          document.getElementById('cacheStatusText').innerHTML = `✅ Synced (${res.length} units)`;
+          renderPickupList(inv); updateInventoryMenu(inv);
+          
+          document.getElementById('cacheStatusText').innerHTML = `✅ Synced (${res.length})`;
           document.getElementById('cacheStatusText').className = "text-success fw-bold";
           
-          if (!silent) { showLoading(false); Swal.fire("Synced!", "Data updated.", "success"); }
-
+          if (!silent) { showLoading(false); Swal.fire("Synced!", "", "success"); }
       } catch (e) {
-          if (!silent) { showLoading(false); Swal.fire("Error", "Sync failed: " + e, "error"); }
+          if (!silent) { showLoading(false); Swal.fire("Error", "Sync failed. Try again.", "error"); }
       }
   }
 
+  // --- Receive Logic ---
   function addParcelToList() {
       const isManual = document.getElementById('chkManualEntry').checked;
       const photo = document.getElementById('inputPhoto');
-      if (!isManual && !selectedResident) { Swal.fire("Notice", "Select resident", "warning"); return; }
-      if (photo.files.length === 0) { Swal.fire("Notice", "Take photo", "warning"); return; }
+      if (!isManual && !selectedResident) { Swal.fire("Select resident", "", "warning"); return; }
+      if (photo.files.length === 0) { Swal.fire("Take photo", "", "warning"); return; }
 
-      showLoading(true);
-      compressImage(photo.files[0], 0.6, function(base64) {
-          const item = {
-              id: generateUUID(), timestamp: new Date().toISOString(),
-              unit: isManual ? document.getElementById('manualUnit').value : selectedResident.unit,
-              residentName: isManual ? document.getElementById('manualName').value : selectedResident.name,
-              email: isManual ? "" : selectedResident.email,
-              location: document.getElementById('inputLocation').value,
-              courier: document.getElementById('inputCourier').value,
-              photoBase64: base64, status: 'pending', isManual: isManual
-          };
-          tempBatch.push(item);
-          renderTempList();
-          resetForm();
-          showLoading(false);
-      });
-  }
-
-  function submitBatch() {
-      let q = JSON.parse(localStorage.getItem('p_sync_queue') || '[]');
-      q = [...q, ...tempBatch];
-      localStorage.setItem('p_sync_queue', JSON.stringify(q));
-      tempBatch = []; renderTempList(); updateSyncUI();
-      Swal.fire("Saved", "Will sync when online.", "success");
-      autoSyncProcess();
-  }
-
-  async function autoSyncProcess() {
-      if (isSyncing || !navigator.onLine) return;
-      let q = JSON.parse(localStorage.getItem('p_sync_queue') || '[]');
-      if (q.length === 0) return;
-
-      isSyncing = true; updateSyncUI();
-      const item = q[0]; 
-
+      showLoading(true, "Processing Image...");
+      
+      // Error handling for image compression
       try {
-          const res = await callApi('receive', item, 'POST');
-          if (res.success) {
-              q.shift(); 
-              localStorage.setItem('p_sync_queue', JSON.stringify(q));
-              updateSyncUI();
-              setTimeout(autoSyncProcess, 500); 
-          } else {
-              console.error("Sync fail", res);
-              isSyncing = false;
-          }
+          compressImage(photo.files[0], 0.6, function(base64) {
+              const item = {
+                  id: generateUUID(), timestamp: new Date().toISOString(),
+                  unit: isManual ? document.getElementById('manualUnit').value : selectedResident.unit,
+                  residentName: isManual ? document.getElementById('manualName').value : selectedResident.name,
+                  email: isManual ? "" : selectedResident.email,
+                  location: document.getElementById('inputLocation').value,
+                  courier: document.getElementById('inputCourier').value,
+                  photoBase64: base64, status: 'pending', isManual: isManual
+              };
+              tempBatch.push(item);
+              renderTempList();
+              resetForm();
+              showLoading(false);
+          });
       } catch (e) {
-          console.error("Sync error", e);
-          isSyncing = false;
+          showLoading(false);
+          Swal.fire("Error", "Image processing failed.", "error");
       }
   }
 
-  async function searchHistory() {
-      if (!navigator.onLine) return;
-      const q = document.getElementById('historySearch').value;
-      const res = await callApi('searchHistory', q, 'GET');
-      const area = document.getElementById('historyListArea');
-      area.innerHTML = '';
-      res.forEach(p => {
-          area.innerHTML += `<div class="card p-2 mb-2 shadow-sm"><div class="d-flex justify-content-between"><div><b>${p.unit}</b> ${p.name}<br><small>${p.courier} | ${p.timeOut}</small></div><button class="btn btn-sm btn-outline-primary" onclick="restore('${p.id}')">Restore</button></div></div>`;
+  // 🔴 V3.2 Change: Just Queue, Don't Sync yet
+  function queueBatchForSync() {
+      let queue = getQueue();
+      // Add 'receive' tasks to queue
+      tempBatch.forEach(item => {
+          queue.push({ type: 'receive', data: item, id: generateUUID() });
       });
-  }
-  
-  async function restore(id) {
-     if(confirm("Restore this parcel?")) {
-         showLoading(true);
-         await callApi('restore', null, 'POST?action=restore&id='+id);
-         showLoading(false);
-         searchHistory();
-     }
+      saveQueue(queue);
+      
+      tempBatch = [];
+      renderTempList();
+      updateSyncUI();
+      
+      Swal.fire({
+          icon: 'success',
+          title: 'Saved to Queue',
+          text: 'Data is safe. Will upload automatically when online.',
+          timer: 2000,
+          showConfirmButton: false
+      });
+      
+      processSyncQueue(); // Trigger background sync
   }
 
-  async function processPickup() {
+  // --- Pickup Logic (Offline First) ---
+  function toggleSelect(id) {
+     // Allow offline selection!
+     if(selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
+     document.getElementById('selectedCount').innerText = selectedIds.size;
+     document.getElementById('btnPickup').classList.toggle('d-none', selectedIds.size===0);
+     renderPickupList(allParcels); // Re-render to show highlighting
+  }
+
+  function finishPickupOffline() {
      if (signaturePad.isEmpty()) return Swal.fire("Sign!", "", "warning");
      const sign = signaturePad.toDataURL().split(',')[1];
      bootstrap.Modal.getInstance(document.getElementById('signModal')).hide();
-     showLoading(true);
-     try {
-         const res = await callApi('pickup', { ids: Array.from(selectedIds), signBase64: sign }, 'POST');
-         if(res.success) {
-             Swal.fire("Done!", "", "success");
-             selectedIds.clear();
-             forceUpdateCache(true); 
-         }
-     } catch(e) { Swal.fire("Error", e.toString(), "error"); }
-     showLoading(false);
+     
+     // 1. Optimistic Update (Update UI immediately)
+     const idsToPickup = Array.from(selectedIds);
+     allParcels = allParcels.filter(p => !selectedIds.has(p.id));
+     localStorage.setItem('p_inventory', JSON.stringify(allParcels)); // Update Cache
+     
+     renderPickupList(allParcels);
+     updateInventoryMenu(allParcels);
+     
+     // 2. Add to Sync Queue
+     let queue = getQueue();
+     queue.push({ 
+         type: 'pickup', 
+         data: { ids: idsToPickup, signBase64: sign },
+         id: generateUUID()
+     });
+     saveQueue(queue);
+     
+     selectedIds.clear();
+     document.getElementById('btnPickup').classList.add('d-none');
+     updateSyncUI();
+
+     Swal.fire("Picked Up!", "Saved offline. Will sync later.", "success");
+     processSyncQueue();
   }
 
-  // --- Helpers ---
-  function applyConfig(c) {
-      const loc = document.getElementById('inputLocation'), cur = document.getElementById('inputCourier');
-      loc.innerHTML = ''; cur.innerHTML = '';
-      if(c.locations) c.locations.forEach(l => loc.add(new Option(l, l)));
-      if(c.couriers) c.couriers.forEach(r => cur.add(new Option(r, r)));
+  // --- Background Sync Engine (The Heart of V3.2) ---
+  function getQueue() { return JSON.parse(localStorage.getItem('p_global_queue') || '[]'); }
+  function saveQueue(q) { localStorage.setItem('p_global_queue', JSON.stringify(q)); }
+
+  async function processSyncQueue() {
+      if (isSyncing || !navigator.onLine) return;
+      
+      let queue = getQueue();
+      if (queue.length === 0) {
+          document.getElementById('syncStatus').className = 'sync-status sync-idle me-3';
+          return;
+      }
+
+      isSyncing = true;
+      document.getElementById('syncStatus').className = 'sync-status sync-uploading me-3'; // Blue pulsing
+      
+      const task = queue[0]; // Take first task
+      
+      try {
+          let res;
+          if (task.type === 'receive') {
+              res = await callApi('receive', task.data, 'POST');
+          } else if (task.type === 'pickup') {
+              res = await callApi('pickup', task.data, 'POST');
+          }
+
+          if (res && res.success) {
+              queue.shift(); // Remove on success
+              saveQueue(queue);
+              updateSyncUI();
+              // Small delay to prevent rate limit
+              setTimeout(() => { isSyncing = false; processSyncQueue(); }, 500); 
+          } else {
+              console.error("Task failed", res);
+              isSyncing = false; // Stop on logic error to prevent infinite loop of bad request
+          }
+      } catch (e) {
+          console.error("Network error, retry later", e);
+          isSyncing = false; // Stop on network error
+          updateNetworkStatus(); // Update UI to show offline?
+      }
   }
-  
+
+  function updateSyncUI() {
+      const q = getQueue();
+      document.getElementById('queueCount').innerText = q.length;
+  }
+
+  // --- Misc ---
+  function applyConfig(c) {
+      const l = document.getElementById('inputLocation'), r = document.getElementById('inputCourier');
+      l.innerHTML=''; r.innerHTML='';
+      if(c.locations) c.locations.forEach(x=>l.add(new Option(x,x)));
+      if(c.couriers) c.couriers.forEach(x=>r.add(new Option(x,x)));
+  }
   function handleUnitSearch(e) {
       const v = e.target.value.toLowerCase(), dd = document.getElementById('unitDropdown');
       dd.innerHTML = '';
       if (v.length < 1) { dd.style.display = 'none'; return; }
-      const matches = residentData.filter(r => r.label.toLowerCase().includes(v)).slice(0, 10);
-      matches.forEach(m => {
-          const div = document.createElement('div');
-          div.className = 'dropdown-item';
+      residentData.filter(r => r.label.toLowerCase().includes(v)).slice(0, 10).forEach(m => {
+          const div = document.createElement('div'); div.className = 'dropdown-item';
           div.innerHTML = `<b>${m.unit}</b> - ${m.name}`;
           div.onclick = () => {
               document.getElementById('inputUnit').value = m.unit + " - " + m.name;
-              selectedResident = m;
-              dd.style.display = 'none';
+              selectedResident = m; dd.style.display = 'none';
               document.getElementById('emailWarning').style.display = m.hasEmail ? 'none' : 'block';
           };
           dd.appendChild(div);
       });
       dd.style.display = 'block';
   }
-
+  function renderTempList() {
+      const area = document.getElementById('tempBatchArea');
+      area.innerHTML = tempBatch.length > 0 ? '<p class="small fw-bold text-muted">READY TO QUEUE:</p>' : '';
+      tempBatch.forEach((item, idx) => {
+          area.innerHTML += `<div class="temp-item"><div class="flex-grow-1 small"><b>${item.unit}</b> - ${item.residentName}</div><button class="btn btn-sm text-danger" onclick="tempBatch.splice(${idx},1);renderTempList();">✕</button></div>`;
+      });
+      document.getElementById('batchCount').innerText = tempBatch.length;
+      document.getElementById('btnFinalSubmit').classList.toggle('d-none', tempBatch.length === 0);
+  }
   function renderPickupList(data) {
-      const area = document.getElementById('parcelListArea');
-      area.innerHTML = '';
+      const area = document.getElementById('parcelListArea'); area.innerHTML = '';
       data.forEach(p => {
           const isSelected = selectedIds.has(p.id);
           area.innerHTML += `<div class="parcel-card d-flex align-items-center p-2 ${isSelected?'selected':''}" onclick="toggleSelect('${p.id}')"><img src="${p.photo}" class="parcel-img"><div class="ms-3"><b>${p.unit}</b> ${p.name}<br><small>${p.location} | ${p.courier}</small></div></div>`;
       });
   }
-
   function updateInventoryMenu(data) {
+      const c = document.getElementById('invVisualizerArea'); c.innerHTML = '';
+      const g = {}; data.forEach(p => { const l=p.location||'Other'; if(!g[l])g[l]=[]; g[l].push(p); });
+      Object.keys(g).sort().forEach(loc => {
+          let h = `<div class="inv-section"><div class="inv-header">${loc} <span class="badge bg-secondary">${g[loc].length}</span></div><div class="inv-body"><div class="inv-chips">`;
+          g[loc].forEach(p => { h += `<div class="inv-chip" onclick="this.classList.toggle('checked')">${p.unit}</div>`; });
+          c.innerHTML += h + `</div></div></div>`;
+      });
       document.getElementById('invTotalBadge').innerText = `Total: ${data.length}`;
-      const container = document.getElementById('invVisualizerArea');
-      container.innerHTML = '';
-      
-      const groups = {};
-      data.forEach(p => { const l = p.location||'Other'; if(!groups[l]) groups[l]=[]; groups[l].push(p); });
-      
-      Object.keys(groups).sort().forEach(loc => {
-          let html = `<div class="inv-section"><div class="inv-header">${loc} <span class="badge bg-secondary">${groups[loc].length}</span></div><div class="inv-body"><div class="inv-chips">`;
-          groups[loc].forEach(p => { html += `<div class="inv-chip" onclick="this.classList.toggle('checked')">${p.unit}</div>`; });
-          html += `</div></div></div>`;
-          container.innerHTML += html;
+  }
+  
+  // Search History
+  function debouncedHistorySearch() { clearTimeout(historyTimeout); historyTimeout = setTimeout(searchHistory, 500); }
+  async function searchHistory() {
+      if (!navigator.onLine) return document.getElementById('historyListArea').innerHTML = '<div class="text-center text-muted py-4">Offline: Cannot search history</div>';
+      const q = document.getElementById('historySearch').value;
+      const res = await callApi('searchHistory', q, 'GET');
+      const area = document.getElementById('historyListArea'); area.innerHTML = '';
+      res.forEach(p => {
+          area.innerHTML += `<div class="card p-2 mb-2 shadow-sm"><div class="d-flex justify-content-between"><div><b>${p.unit}</b> ${p.name}<br><small>${p.courier} | ${p.timeOut}</small></div><button class="btn btn-sm btn-outline-primary" onclick="restore('${p.id}')">Restore</button></div></div>`;
       });
   }
-
-  function toggleSelect(id) {
-     if(!navigator.onLine) return Swal.fire("Offline", "Go online to pickup", "info");
-     if(selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
-     document.getElementById('selectedCount').innerText = selectedIds.size;
-     document.getElementById('btnPickup').classList.toggle('d-none', selectedIds.size===0);
+  async function restore(id) {
+     if(confirm("Restore?")) { showLoading(true); await callApi('restore', null, 'POST?action=restore&id='+id); showLoading(false); searchHistory(); }
+  }
+  function filterParcels() {
+    const q = document.getElementById('searchBox').value.toLowerCase().trim();
+    renderPickupList(allParcels.filter(p => String(p.unit).toLowerCase().includes(q) || String(p.name).toLowerCase().includes(q)));
   }
   function previewPhoto(e) { if(e.target.files[0]) { const r = new FileReader(); r.onload=ev=>document.getElementById('previewImg').src=ev.target.result; r.readAsDataURL(e.target.files[0]); document.getElementById('photoPreview').classList.remove('d-none'); } }
   function resetForm() { document.getElementById('inputUnit').value=''; document.getElementById('inputPhoto').value=''; document.getElementById('photoPreview').classList.add('d-none'); selectedResident=null; }
-  function updateSyncUI() { const q = JSON.parse(localStorage.getItem('p_sync_queue') || '[]'); const b = document.getElementById('syncCountBadge'); b.innerText = q.length; b.style.display = q.length>0 ? 'block':'none'; }
   function toggleManualEntry() { const m = document.getElementById('chkManualEntry').checked; document.getElementById('areaSearch').classList.toggle('d-none', m); document.getElementById('areaManual').classList.toggle('d-none', !m); }
-  function checkNetworkStatus() { document.getElementById('offlineBanner').style.display = navigator.onLine ? 'none' : 'block'; }
-  function switchTab(t, el) { document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active')); el.classList.add('active'); ['receive', 'pickup', 'history'].forEach(id => document.getElementById('tab-'+id).style.display = (id === t ? 'block' : 'none')); if(t==='pickup' && navigator.onLine) forceUpdateCache(true); if(t==='history') searchHistory(); }
+  function switchTab(t, el) { document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active')); el.classList.add('active'); ['receive', 'pickup', 'history'].forEach(id => document.getElementById('tab-'+id).style.display = (id === t ? 'block' : 'none')); if(t==='history') searchHistory(); }
   function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
   function compressImage(file, q, cb) { const r = new FileReader(); r.readAsDataURL(file); r.onload = e => { const i = new Image(); i.src = e.target.result; i.onload = () => { const c = document.createElement('canvas'); const max=800; let w=i.width, h=i.height; if(w>max){h=Math.round(h*(max/w));w=max;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); cb(c.toDataURL('image/jpeg', q).split(',')[1]); } } }
-  // --- UI Helper Functions ---
-  function showLoading(s) {const el = document.getElementById('loadingOverlay');if (el) el.style.display = s ? 'flex' : 'none';
-  }
 </script>
 </body>
 </html>
-
-
