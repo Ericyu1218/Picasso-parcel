@@ -1,4 +1,4 @@
-const CACHE_NAME = 'picasso-v1';
+const CACHE_NAME = 'picasso-v2'; // 升級版本號以強制更新
 const ASSETS = [
   './',
   './index.html',
@@ -9,14 +9,13 @@ const ASSETS = [
   'https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js'
 ];
 
-// 安裝時：下載並快取所有檔案
+// 安裝
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
+  self.skipWaiting(); // 強制立即接管
+  e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
 });
 
-// 啟動時：清理舊快取
+// 啟動
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => Promise.all(
@@ -25,27 +24,22 @@ self.addEventListener('activate', (e) => {
       })
     ))
   );
+  self.clients.claim(); // 立即控制頁面
 });
 
-// 攔截請求：如果斷網，從快取給檔案 (Network First 策略)
+// 請求攔截
 self.addEventListener('fetch', (e) => {
-  // 只處理 GET 請求
-  if (e.request.method !== 'GET') return;
+  const url = e.request.url;
 
+  // 🔴 關鍵修正：如果是 Google API，直接放行，不要快取！
+  if (url.includes('script.google.com')) {
+     return; // 直接回傳，讓瀏覽器自己處理 API 連線
+  }
+
+  // 其他靜態檔案 (HTML, CSS, JS) 才走快取
   e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        // 只有成功的請求才放入快取 (排除 API 請求，因為 API 我們用 localStorage 處理)
-        const isApi = e.request.url.includes('script.google.com');
-        if (!isApi && res && res.status === 200) {
-           const resClone = res.clone();
-           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, resClone));
-        }
-        return res;
-      })
-      .catch(() => {
-        // 如果斷網，讀取快取
-        return caches.match(e.request);
-      })
+    caches.match(e.request).then((cachedResponse) => {
+        return cachedResponse || fetch(e.request);
+    })
   );
 });
