@@ -203,7 +203,6 @@
 
   // --- 🟢 核心 API 調用 (整合 PIN 驗證) ---
   async function callApi(action, payload = null, method = 'GET') {
-    // 若無 PIN，則彈窗要求輸入
     if (!SYSTEM_KEY) {
         const { value: key } = await Swal.fire({
             title: 'System Locked 🔒',
@@ -236,7 +235,6 @@
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const json = await response.json();
         
-        // 驗證失敗處理
         if (json.error && json.error.includes("Access Denied")) {
             localStorage.removeItem('p_api_key');
             SYSTEM_KEY = "";
@@ -274,11 +272,8 @@ window.onload = async function() {
     document.getElementById('inputUnit').addEventListener('input', handleUnitSearch);
     document.getElementById('inputPhoto').addEventListener('change', previewPhoto);
 
-    // 1. 載入本地快取介面
     loadFromCache();
 
-    // 2. 🟢 核心修正：啟動時強制檢查一次 PIN 碼
-    // 如果沒有密碼，這會觸發彈窗；如果有密碼，它會順便更新一次資料
     if (navigator.onLine) {
         try {
             await forceUpdateCache(true); 
@@ -386,7 +381,7 @@ window.onload = async function() {
                   residentName: isManual ? document.getElementById('manualName').value : selectedResident.name,
                   email: isManual ? "" : selectedResident.email,
                   location: document.getElementById('inputLocation').value,
-                  courier: document.getElementById('inputCourier').value,
+                  counter: document.getElementById('inputCourier').value,
                   photoBase64: base64, status: 'pending', isManual: isManual
               };
               tempBatch.push(item);
@@ -415,7 +410,8 @@ window.onload = async function() {
      if(selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
      document.getElementById('selectedCount').innerText = selectedIds.size;
      document.getElementById('btnPickup').classList.toggle('d-none', selectedIds.size===0);
-     renderPickupList(allParcels);
+     // 🟢 修正點：切換選擇後，應重新執行目前的搜尋過濾，而非渲染全部
+     filterParcels();
   }
 
   function finishPickupOffline() {
@@ -526,7 +522,10 @@ window.onload = async function() {
       });
   }
   async function restore(id) { if(confirm("Restore?")) { showLoading(true); await callApi('restore', null, 'POST?action=restore&id='+id); showLoading(false); searchHistory(); } }
-  function filterParcels() { const q = document.getElementById('searchBox').value.toLowerCase().trim(); renderPickupList(allParcels.filter(p => String(p.unit).toLowerCase().includes(q) || String(p.name).toLowerCase().includes(q))); }
+  function filterParcels() { 
+      const q = document.getElementById('searchBox').value.toLowerCase().trim(); 
+      renderPickupList(allParcels.filter(p => String(p.unit).toLowerCase().includes(q) || String(p.name).toLowerCase().includes(q))); 
+  }
   function previewPhoto(e) { if(e.target.files[0]) { const r = new FileReader(); r.onload=ev=>document.getElementById('previewImg').src=ev.target.result; r.readAsDataURL(e.target.files[0]); document.getElementById('photoPreview').classList.remove('d-none'); } }
   function resetForm() { document.getElementById('inputUnit').value=''; document.getElementById('inputPhoto').value=''; document.getElementById('photoPreview').classList.add('d-none'); selectedResident=null; }
   function toggleManualEntry() { const m = document.getElementById('chkManualEntry').checked; document.getElementById('areaSearch').classList.toggle('d-none', m); document.getElementById('areaManual').classList.toggle('d-none', !m); }
@@ -547,5 +546,3 @@ window.onload = async function() {
 </script>
 </body>
 </html>
-
-
