@@ -455,30 +455,64 @@
   function getQueue() { return JSON.parse(localStorage.getItem('p_global_queue') || '[]'); }
   function saveQueue(q) { localStorage.setItem('p_global_queue', JSON.stringify(q)); }
 
-  async function processSyncQueue() {
-      if (isSyncing || !navigator.onLine) return;
-      let queue = getQueue();
-      if (queue.length === 0) { 
-          document.getElementById('syncStatus').className = 'sync-status sync-idle me-3'; 
-          return; 
-      }
-      isSyncing = true;
-      lastSyncTime = Date.now();
-      document.getElementById('syncStatus').className = 'sync-status sync-uploading me-3';
-      const task = queue[0];
-      try {
-          let res;
-          if (task.type === 'receive') res = await callApi('receive', task.data, 'POST');
-          else if (task.type === 'pickup') res = await callApi('pickup', task.data, 'POST');
+async function processSyncQueue() {
+    if (isSyncing || !navigator.onLine) return;
+    let queue = getQueue();
+    
+    if (queue.length === 0) { 
+        document.getElementById('syncStatus').className = 'sync-status sync-idle me-3'; 
+        return; 
+    }
+    
+    isSyncing = true;
+    lastSyncTime = Date.now();
+    document.getElementById('syncStatus').className = 'sync-status sync-uploading me-3';
+    
+    const task = queue[0];
+    
+    try {
+        let res;
+        if (task.type === 'receive') res = await callApi('receive', task.data, 'POST');
+        else if (task.type === 'pickup') res = await callApi('pickup', task.data, 'POST');
 
-          if (res && res.success) {
-              queue.shift(); saveQueue(queue); updateSyncUI();
-              setTimeout(() => { isSyncing = false; processSyncQueue(); }, 500); 
-          } else { isSyncing = false; }
-      } catch (e) {
-          isSyncing = false; updateNetworkStatus();
-      }
-  }
+        if (res && res.success) {
+            queue.shift(); // 移除已完成任務
+            saveQueue(queue); 
+            updateSyncUI();
+
+            // 🟢 核心修復 1：成功 Receive 後，即刻更新本地 Pickup 畫面
+            if (task.type === 'receive') {
+                // 檢查係咪已經喺列表入面 (以防萬一)
+                if (!allParcels.some(p => p.id === task.data.id)) {
+                    allParcels.unshift(task.data); // 加到陣列最頂
+                    localStorage.setItem('p_inventory', JSON.stringify(allParcels));
+                    
+                    // 如果用家正喺 Pickup 版面，即刻見到更新
+                    renderPickupList(allParcels); 
+                    updateInventoryMenu(allParcels);
+                }
+            }
+
+            setTimeout(() => { 
+                isSyncing = false; 
+                processSyncQueue(); // 繼續處理下一單
+                
+                // 🟢 核心修復 2：當條 Queue 行曬，做一次靜默同步，確保同 Server 完美同步
+                if (getQueue().length === 0) {
+                    forceUpdateCache(true); // true 代表靜音模式，唔會彈 Loading 畫面
+                }
+            }, 500); 
+            
+        } else { 
+            // API 冇回傳 success (可能 Server 慢/出錯)，留喺 Queue 等下個 heartbeat 再試
+            isSyncing = false; 
+        }
+    } catch (e) {
+        // 網絡突然斷開或發生錯誤
+        isSyncing = false; 
+        updateNetworkStatus();
+    }
+}
 
   function updateSyncUI() { document.getElementById('queueCount').innerText = getQueue().length; }
 
