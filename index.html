@@ -339,7 +339,7 @@
 
   async function registerSW() {
     if ('serviceWorker' in navigator) {
-      try { await navigator.serviceWorker.register('sw.js?v=3.7'); } catch(e){}
+      try { await navigator.serviceWorker.register('sw.js?v=3.8'); } catch(e){}
     }
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault(); deferredPrompt = e;
