@@ -1,7 +1,7 @@
 {
   "name": "Picasso Parcel System",
   "short_name": "Picasso Parcel",
-  "start_url": "./index.html?v=3.7",
+  "start_url": "./index.html?v=3.8",
   "display": "standalone",
   "background_color": "#f8f9fa",
   "theme_color": "#f8f9fa",
